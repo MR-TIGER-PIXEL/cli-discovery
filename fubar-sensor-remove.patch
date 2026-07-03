@@ -1,0 +1,89 @@
+diff --git a/src/commands/sensor.ts b/src/commands/sensor.ts
+index 86a44d1..c5e9648 100644
+--- a/src/commands/sensor.ts
++++ b/src/commands/sensor.ts
+@@ -57,6 +57,20 @@ export function makeSensorCommand(): Command {
+     ["fubar sensor trigger kitchen-motion", "fubar sensor trigger office-temperature 72", "fubar sensor trigger front-door open --json"],
+   );
+ 
++  addExamples(
++    sensor
++      .command("remove")
++      .description("Remove a sensor from the smart home.")
++      .argument("<sensor>", "sensor id or name")
++      .action((ref: string, command: Command) =>
++        runAction(command, () => {
++          const result = createService().removeSensor(ref);
++          writeOutput(command, result, () => console.log(success(`Removed sensor ${ref}.`)));
++        }),
++      ),
++    ["fubar sensor remove kitchen-motion"],
++  );
++
+   addExamples(
+     sensor
+       .command("status")
+diff --git a/src/services/smart-home-service.ts b/src/services/smart-home-service.ts
+index e09b9cd..357aa59 100644
+--- a/src/services/smart-home-service.ts
++++ b/src/services/smart-home-service.ts
+@@ -168,6 +168,16 @@ export class SmartHomeService {
+     return sensor;
+   }
+ 
++  removeSensor(ref: string): { removed: boolean; ref: string } {
++    const sensor = this.getSensor(ref);
++    const room = this.getRoom(sensor.roomId);
++    const removed = this.repo.removeSensor(ref);
++    if (removed) {
++      this.recordEvent("sensor.removed", `sensor removed: ${sensor.name}`, { sensorId: sensor.id }, room.homeId, room.id);
++    }
++    return { removed, ref };
++  }
++
+   triggerSensor(ref: string, value?: string): Sensor {
+     const sensor = this.getSensor(ref);
+     const room = this.getRoom(sensor.roomId);
+diff --git a/src/storage/repository.ts b/src/storage/repository.ts
+index cc75eb7..e2ea04c 100644
+--- a/src/storage/repository.ts
++++ b/src/storage/repository.ts
+@@ -193,6 +193,11 @@ export class SmartHomeRepository {
+     return row ? mapSensor(row) : null;
+   }
+ 
++  removeSensor(ref: string): boolean {
++    const result = this.db.query("DELETE FROM sensors WHERE id = ?1 OR name = ?2").run(ref, ref);
++    return result.changes > 0;
++  }
++
+   updateSensorTrigger(sensorId: string, value: string, triggeredAt: string): void {
+     this.db
+       .query("UPDATE sensors SET last_value = ?, last_triggered_at = ? WHERE id = ?")
+diff --git a/tests/smoke.test.ts b/tests/smoke.test.ts
+index fa960dd..008fe7c 100644
+--- a/tests/smoke.test.ts
++++ b/tests/smoke.test.ts
+@@ -55,6 +55,22 @@ test("jsonl list output emits one parseable object per row", async () => {
+   expect(rows.map((row) => row.name)).toContain("kitchen-main");
+ });
+ 
++test("sensor remove deletes a sensor from listings", async () => {
++  expect((await run(["home", "create", "Sensor Remove Home"])).exitCode).toBe(0);
++  expect((await run(["room", "add", "lab", "--home", "Sensor Remove Home"])).exitCode).toBe(0);
++  expect((await run(["sensor", "add", "lab", "motion", "lab-motion"])).exitCode).toBe(0);
++
++  const before = await run(["--json", "sensor", "list", "--room", "lab"]);
++  expect(before.exitCode).toBe(0);
++  expect(JSON.parse(before.stdout).data.map((sensor: { name: string }) => sensor.name)).toContain("lab-motion");
++
++  expect((await run(["sensor", "remove", "lab-motion"])).exitCode).toBe(0);
++
++  const after = await run(["--json", "sensor", "list", "--room", "lab"]);
++  expect(after.exitCode).toBe(0);
++  expect(JSON.parse(after.stdout).data.map((sensor: { name: string }) => sensor.name)).not.toContain("lab-motion");
++});
++
+ test("clear removes all persisted smart home state", async () => {
+   expect((await run(["home", "create", "Clear Test Home"])).exitCode).toBe(0);
+   const before = await run(["--json", "status"]);
