@@ -94,3 +94,98 @@ My manual discovery process was similar to Codex’s process because we both use
 Codex moved from discovering the tool to using it by translating a natural-language request into specific CLI commands. For example, it turned the request to create three rooms into fubar home create and several fubar room add commands.
 
 This lab showed me that both people and AI agents can understand an unfamiliar CLI by reading help output, forming hypotheses, running small experiments, using structured output like JSON, and verifying results after making changes.
+
+-----
+
+## Stretch Lab: Teach fubar a New Trick
+
+### What CRUD Means
+
+CRUD means Create, Read, Update, and Delete. These are four basic actions that software systems often support for important objects.
+
+* Create means making a new object.
+* Read means viewing or inspecting existing objects.
+* Update means changing an existing object.
+* Delete means removing an object.
+
+### What Missing Capability I Chose
+
+I chose to add a delete command for sensors.
+
+From the CRUD table, sensors could already be created, listed, checked, and triggered, but there was no direct command to remove a sensor. That meant sensors were missing a clear Delete operation.
+
+The new command I chose was:
+
+```bash
+fubar sensor remove <sensor>
+```
+
+### What Files Codex Changed
+
+Codex changed these files:
+
+```text
+src/commands/sensor.ts
+src/services/smart-home-service.ts
+src/storage/repository.ts
+tests/smoke.test.ts
+```
+
+Codex added the `remove <sensor>` command to the sensor command file. It added service logic to remove a sensor. It added repository logic to delete a sensor by id or name. It also added a smoke test to prove that a removed sensor disappears from the sensor list.
+
+### How I Tested the New Command
+
+I tested the new command from the terminal.
+
+First, I checked that the new command existed:
+
+```bash
+fubar sensor --help
+```
+
+Then I created a small example:
+
+```bash
+fubar clear
+fubar home create "Demo Home"
+fubar room add kitchen --home "Demo Home"
+fubar sensor add kitchen motion kitchen-motion
+fubar sensor list --room kitchen --json
+```
+
+The list command showed that the `kitchen-motion` sensor existed.
+
+Then I removed the sensor:
+
+```bash
+fubar sensor remove kitchen-motion
+```
+
+After that, I listed the sensors again:
+
+```bash
+fubar sensor list --room kitchen --json
+```
+
+### What Command Proved the Behavior Works
+
+The command that proved the new feature worked was:
+
+```bash
+fubar sensor list --room kitchen --json
+```
+
+After removing `kitchen-motion`, the final JSON output showed:
+
+```json
+{
+  "ok": true,
+  "data": []
+}
+```
+
+This proved that the sensor was removed successfully.
+
+### Why This Change Matters
+
+This change matters because it makes fubar’s sensor commands more complete. Before this stretch, sensors could be created and inspected, but they could not be directly removed. Adding `fubar sensor remove <sensor>` gives sensors a clearer CRUD workflow because they now have a direct Delete command.
